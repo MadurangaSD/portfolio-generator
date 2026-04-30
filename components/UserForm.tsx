@@ -104,20 +104,38 @@ export default function UserForm() {
 			const result = await generatePortfolioContent(data);
 			setAiResponse(result);
 
-			// Save complete data object to localStorage
-			if (typeof window !== "undefined") {
-				const portfolioObject = {
-					aiResponse: result,
-					formData: {
-						fullName: data.fullName,
-						role: data.role,
-						bio: data.bio,
-						linkedinUrl: data.linkedinUrl,
-						githubUrl: data.githubUrl,
-						skills: data.skills.map((s) => s.value).filter(Boolean),
-						projects: data.projects,
+			const portfolioObject = {
+				aiResponse: result,
+				formData: {
+					fullName: data.fullName,
+					role: data.role,
+					bio: data.bio,
+					linkedinUrl: data.linkedinUrl,
+					githubUrl: data.githubUrl,
+					skills: data.skills.map((s) => s.value).filter(Boolean),
+					projects: data.projects,
+				},
+			};
+
+			// Persist to the database when the API is available; keep localStorage as a UI fallback.
+			try {
+				const response = await fetch("/api/portfolio", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
 					},
-				};
+					body: JSON.stringify(portfolioObject),
+				});
+
+				if (!response.ok) {
+					const errorBody = (await response.json().catch(() => null)) as { error?: string } | null;
+					throw new Error(errorBody?.error ?? "Failed to persist portfolio data.");
+				}
+			} catch (error) {
+				console.error("Database save failed, falling back to localStorage:", error);
+			}
+
+			if (typeof window !== "undefined") {
 				localStorage.setItem("portfolioData", JSON.stringify(portfolioObject));
 				setTimeout(() => {
 					window.location.href = "/portfolio";

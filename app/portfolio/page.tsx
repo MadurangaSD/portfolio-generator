@@ -30,8 +30,21 @@ export default function PortfolioPage() {
 		const data = localStorage.getItem("portfolioData");
 		if (data) {
 			try {
+				const parsed = JSON.parse(data) as PortfolioData;
+				const normalizedSkills = Array.isArray(parsed.formData.skills)
+					? parsed.formData.skills.map((skill) =>
+						typeof skill === "string" ? skill : String((skill as { value?: string }).value ?? ""),
+					)
+					: [];
+
 				// eslint-disable-next-line react-hooks/set-state-in-effect
-				setPortfolioData(JSON.parse(data));
+				setPortfolioData({
+					...parsed,
+					formData: {
+						...parsed.formData,
+						skills: normalizedSkills.filter(Boolean),
+					},
+				});
 			} catch (error) {
 				console.error("Error parsing portfolio data:", error);
 			}
@@ -41,16 +54,18 @@ export default function PortfolioPage() {
 
 	if (isLoading) {
 		return (
-			<div className="min-h-screen bg-[#050505] flex items-center justify-center">
-				<div className="text-white text-lg">Loading your portfolio...</div>
+			<div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-7xl items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+				<div className="rounded-3xl border border-white/10 bg-white/5 px-8 py-6 text-white shadow-2xl shadow-black/30 backdrop-blur-xl">
+					Loading your portfolio...
+				</div>
 			</div>
 		);
 	}
 
 	if (!portfolioData) {
 		return (
-			<div className="min-h-screen bg-[#050505] flex items-center justify-center">
-				<div className="text-center">
+			<div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-7xl items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+				<div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center shadow-2xl shadow-black/30 backdrop-blur-xl">
 					<p className="text-white text-lg mb-4">No portfolio data found</p>
 					<Link href="/" className="text-cyan-400 hover:text-cyan-300">
 						Create your portfolio
