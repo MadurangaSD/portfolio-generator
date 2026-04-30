@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
+import { generatePortfolioContent } from "@/lib/gemini";
 
 type PortfolioFormValues = {
 	fullName: string;
@@ -16,6 +17,8 @@ const steps = ["Profile", "Bio", "Skills", "Projects", "Review"] as const;
 export default function UserForm() {
 	const [currentStep, setCurrentStep] = useState(0);
 	const [submittedData, setSubmittedData] = useState<PortfolioFormValues | null>(null);
+	const [isLoading, setIsLoading] = useState(false);
+	const [aiResponse, setAiResponse] = useState("");
 
 	const {
 		control,
@@ -86,12 +89,23 @@ export default function UserForm() {
 		setCurrentStep((prev) => Math.max(prev - 1, 0));
 	};
 
-	const onSubmit = (data: PortfolioFormValues) => {
+	const onSubmit = async (data: PortfolioFormValues) => {
 		setSubmittedData(data);
-		console.log("Portfolio form submitted:", {
-			...data,
-			skills: data.skills.map((skill) => skill.value.trim()).filter(Boolean),
-		});
+		setIsLoading(true);
+
+		try {
+			const result = await generatePortfolioContent(data);
+			setAiResponse(result);
+			console.log("Portfolio form submitted:", {
+				...data,
+				skills: data.skills.map((skill) => skill.value.trim()).filter(Boolean),
+			});
+		} catch (error) {
+			console.error("Error generating portfolio content:", error);
+			setAiResponse("Error generating content. Please try again.");
+		} finally {
+			setIsLoading(false);
+		}
 	};
 
 	return (
@@ -332,14 +346,20 @@ export default function UserForm() {
 					) : (
 						<button
 							type="submit"
-							disabled={isSubmitting}
+							disabled={isSubmitting || isLoading}
 							className="rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:brightness-110 disabled:opacity-60"
 						>
-							{isSubmitting ? "Submitting..." : "Submit Portfolio"}
+							{isLoading ? "Generating..." : isSubmitting ? "Submitting..." : "Submit Portfolio"}
 						</button>
 					)}
 				</div>
 			</form>
+
+			{aiResponse && (
+				<pre className="relative mt-6 overflow-x-auto rounded-2xl border border-cyan-500/40 bg-zinc-900/80 p-4 text-sm leading-6 text-cyan-100 whitespace-pre-wrap">
+					{aiResponse}
+				</pre>
+			)}
 
 			{submittedData && (
 				<div className="relative mt-6 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-200">
