@@ -8,11 +8,13 @@ type PortfolioFormValues = {
 	fullName: string;
 	role: string;
 	bio: string;
+	linkedinUrl: string;
+	githubUrl: string;
 	skills: { value: string }[];
-	projects: { title: string; description: string; techStack: string }[];
+	projects: { title: string; description: string; techStack: string; projectLink: string }[];
 };
 
-const steps = ["Profile", "Bio", "Skills", "Projects", "Review"] as const;
+const steps = ["Profile", "Links", "Bio", "Skills", "Projects", "Review"] as const;
 
 export default function UserForm() {
 	const [currentStep, setCurrentStep] = useState(0);
@@ -32,8 +34,10 @@ export default function UserForm() {
 			fullName: "",
 			role: "",
 			bio: "",
+			linkedinUrl: "",
+			githubUrl: "",
 			skills: [{ value: "" }],
-			projects: [{ title: "", description: "", techStack: "" }],
+			projects: [{ title: "", description: "", techStack: "", projectLink: "" }],
 		},
 	});
 
@@ -66,12 +70,15 @@ export default function UserForm() {
 			return ["fullName", "role"];
 		}
 		if (step === 1) {
-			return ["bio"];
+			return ["linkedinUrl", "githubUrl"];
 		}
 		if (step === 2) {
-			return ["skills"];
+			return ["bio"];
 		}
 		if (step === 3) {
+			return ["skills"];
+		}
+		if (step === 4) {
 			return ["projects"];
 		}
 		return undefined;
@@ -96,10 +103,28 @@ export default function UserForm() {
 		try {
 			const result = await generatePortfolioContent(data);
 			setAiResponse(result);
-			console.log("Portfolio form submitted:", {
-				...data,
-				skills: data.skills.map((skill) => skill.value.trim()).filter(Boolean),
-			});
+
+			// Save complete data object to localStorage
+			if (typeof window !== "undefined") {
+				const portfolioObject = {
+					aiResponse: result,
+					formData: {
+						fullName: data.fullName,
+						role: data.role,
+						bio: data.bio,
+						linkedinUrl: data.linkedinUrl,
+						githubUrl: data.githubUrl,
+						skills: data.skills.map((s) => s.value).filter(Boolean),
+						projects: data.projects,
+					},
+				};
+				localStorage.setItem("portfolioData", JSON.stringify(portfolioObject));
+				setTimeout(() => {
+					window.location.href = "/portfolio";
+				}, 500);
+			}
+
+			console.log("Portfolio form submitted:", data);
 		} catch (error) {
 			console.error("Error generating portfolio content:", error);
 			setAiResponse("Error generating content. Please try again.");
@@ -119,7 +144,7 @@ export default function UserForm() {
 				</p>
 				<div className="flex items-center justify-between gap-4">
 					<h2 className="text-2xl font-semibold text-zinc-100 sm:text-3xl">
-						Multi-step profile form
+						Professional Portfolio Generator
 					</h2>
 					<span className="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-1 text-xs font-medium text-zinc-300">
 						Step {currentStep + 1} / {steps.length}
@@ -140,7 +165,7 @@ export default function UserForm() {
 							<label className="text-sm font-medium text-zinc-300">Full Name</label>
 							<input
 								type="text"
-								placeholder="e.g. Aiden Carter"
+								placeholder="e.g. Sithum Madhuranga"
 								className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 outline-none transition focus:border-emerald-400"
 								{...register("fullName", {
 									required: "Full name is required",
@@ -156,7 +181,7 @@ export default function UserForm() {
 							<label className="text-sm font-medium text-zinc-300">Role</label>
 							<input
 								type="text"
-								placeholder="e.g. Frontend Engineer"
+								placeholder="e.g. Full Stack Developer"
 								className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 outline-none transition focus:border-emerald-400"
 								{...register("role", {
 									required: "Role is required",
@@ -169,6 +194,46 @@ export default function UserForm() {
 				)}
 
 				{currentStep === 1 && (
+					<div className="grid gap-5 sm:grid-cols-2">
+						<div className="space-y-2">
+							<label className="text-sm font-medium text-zinc-300">LinkedIn URL</label>
+							<input
+								type="url"
+								placeholder="https://linkedin.com/in/yourprofile"
+								className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 outline-none transition focus:border-emerald-400"
+								{...register("linkedinUrl", {
+									validate: (value) => {
+										if (!value) return true; // Allow empty
+										return /^https:\/\/.+/.test(value) || "Please enter a valid URL starting with https://";
+									},
+								})}
+							/>
+							{errors.linkedinUrl && (
+								<p className="text-sm text-rose-400">{errors.linkedinUrl.message}</p>
+							)}
+						</div>
+
+						<div className="space-y-2">
+							<label className="text-sm font-medium text-zinc-300">GitHub URL</label>
+							<input
+								type="url"
+								placeholder="https://github.com/yourprofile"
+								className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 outline-none transition focus:border-emerald-400"
+								{...register("githubUrl", {
+									validate: (value) => {
+										if (!value) return true; // Allow empty
+										return /^https:\/\/.+/.test(value) || "Please enter a valid URL starting with https://";
+									},
+								})}
+							/>
+							{errors.githubUrl && (
+								<p className="text-sm text-rose-400">{errors.githubUrl.message}</p>
+							)}
+						</div>
+					</div>
+				)}
+
+				{currentStep === 2 && (
 					<div className="space-y-2">
 						<label className="text-sm font-medium text-zinc-300">Professional Bio</label>
 						<textarea
@@ -184,7 +249,7 @@ export default function UserForm() {
 					</div>
 				)}
 
-				{currentStep === 2 && (
+				{currentStep === 3 && (
 					<div className="space-y-4">
 						<div className="flex items-center justify-between">
 							<h3 className="text-lg font-medium text-zinc-100">Skills</h3>
@@ -219,20 +284,18 @@ export default function UserForm() {
 								</div>
 							))}
 						</div>
-
-						{errors.skills?.root?.message && (
-							<p className="text-sm text-rose-400">{errors.skills.root.message}</p>
-						)}
 					</div>
 				)}
 
-				{currentStep === 3 && (
+				{currentStep === 4 && (
 					<div className="space-y-4">
 						<div className="flex items-center justify-between">
 							<h3 className="text-lg font-medium text-zinc-100">Projects</h3>
 							<button
 								type="button"
-								onClick={() => appendProject({ title: "", description: "", techStack: "" })}
+								onClick={() =>
+									appendProject({ title: "", description: "", techStack: "", projectLink: "" })
+								}
 								className="rounded-lg border border-cyan-400/50 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/20"
 							>
 								Add Project
@@ -285,6 +348,17 @@ export default function UserForm() {
 												required: "Tech stack is required",
 											})}
 										/>
+										<input
+											type="url"
+											placeholder="Project link (https://...)"
+											className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 outline-none transition focus:border-cyan-400"
+											{...register(`projects.${index}.projectLink`, {
+												validate: (value) => {
+													if (!value) return true; // Allow empty
+													return /^https:\/\/.+/.test(value) || "Please enter a valid URL starting with https://";
+												},
+											})}
+										/>
 									</div>
 								</div>
 							))}
@@ -292,7 +366,7 @@ export default function UserForm() {
 					</div>
 				)}
 
-				{currentStep === 4 && (
+				{currentStep === 5 && (
 					<div className="space-y-6">
 						<h3 className="text-lg font-medium text-zinc-100">Review Your Information</h3>
 						<div className="grid gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 text-sm text-zinc-300">
@@ -301,6 +375,12 @@ export default function UserForm() {
 							</p>
 							<p>
 								<span className="font-semibold text-zinc-100">Role:</span> {values.role}
+							</p>
+							<p>
+								<span className="font-semibold text-zinc-100">LinkedIn:</span> {values.linkedinUrl}
+							</p>
+							<p>
+								<span className="font-semibold text-zinc-100">GitHub:</span> {values.githubUrl}
 							</p>
 							<p>
 								<span className="font-semibold text-zinc-100">Bio:</span> {values.bio}
@@ -317,6 +397,7 @@ export default function UserForm() {
 											<p className="font-medium text-zinc-100">{project.title}</p>
 											<p>{project.description}</p>
 											<p className="text-zinc-400">{project.techStack}</p>
+											<p className="text-cyan-300">{project.projectLink}</p>
 										</li>
 									))}
 								</ul>
@@ -363,7 +444,7 @@ export default function UserForm() {
 
 			{submittedData && (
 				<div className="relative mt-6 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-					Form submitted successfully for {submittedData.fullName}.
+					Form submitted successfully for {submittedData.fullName}. Redirecting to your portfolio...
 				</div>
 			)}
 		</section>
