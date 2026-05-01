@@ -1,8 +1,8 @@
 "use server";
 
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import type { Prisma } from "@/lib/generated/prisma/client";
-import { prisma } from "@/lib/prisma";
+import { ObjectId } from "mongodb";
+import { getDb, mongoClient } from "@/lib/mongodb";
 
 type ProjectInput = {
   title: string;
@@ -61,37 +61,53 @@ export async function saveOrUpdatePortfolioAction(
       return { ok: false, error: "No primary email found for signed-in user." };
     }
 
-    const dbUser = await prisma.user.upsert({
-      where: { clerkId: session.userId },
-      update: {
-        email: primaryEmail,
-        name: userFromClerk.fullName ?? payload.formData.fullName || null,
-      },
-      create: {
-        clerkId: session.userId,
-        email: primaryEmail,
-        name: userFromClerk.fullName ?? payload.formData.fullName || null,
-      },
-    });
+    // Ensure MongoDB client is connected
+    if (!mongoClient.topology || !mongoClient.topology.isConnected()) {
+      await mongoClient.connect();
+    }
 
-    const portfolio = await prisma.portfolio.upsert({
-      where: { userId: dbUser.id },
-      update: {
-        bio: payload.formData.bio || null,
-        skills: payload.formData.skills.filter(Boolean),
-        projects: buildProjectsJson(payload),
-        theme: payload.theme ?? "bento-dark",
-      },
-      create: {
-        userId: dbUser.id,
-        bio: payload.formData.bio || null,
-        skills: payload.formData.skills.filter(Boolean),
-        projects: buildProjectsJson(payload),
-        theme: payload.theme ?? "bento-dark",
-      },
-    });
+    const db = getDb();
+    const users = db.collection("User");
+    const portfolios = db.collection("Portfolio");
 
-    return { ok: true, portfolioId: portfolio.id };
+    // Upsert user by clerkId
+    const userResult = await users.findOneAndUpdate(
+      { clerkId: session.userId },
+      {
+        $set: {
+          clerkId: session.userId,
+          email: primaryEmail,
+          name: userFromClerk.fullName ?? payload.formData.fullName ?? null,
+          updatedAt: new Date(),
+        },
+        $setOnInsert: { createdAt: new Date() },
+      },
+      { upsert: true, returnDocument: "after" },
+    );
+
+    const dbUser = userResult.value;
+    const userId = dbUser._id as ObjectId;
+
+    // Upsert portfolio by userId
+    const portfolioResult = await portfolios.findOneAndUpdate(
+      { userId: userId },
+      {
+        $set: {
+          userId,
+          bio: payload.formData.bio ?? null,
+          skills: payload.formData.skills.filter(Boolean),
+          projects: buildProjectsJson(payload),
+          theme: payload.theme ?? "bento-dark",
+          updatedAt: new Date(),
+        },
+        $setOnInsert: { createdAt: new Date() },
+      },
+      { upsert: true, returnDocument: "after" },
+    );
+
+    const portfolio = portfolioResult.value;
+
+    return { ok: true, portfolioId: portfolio._id.toString() };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save portfolio.";
     return { ok: false, error: message };

@@ -1,6 +1,6 @@
 import UserForm from "@/components/UserForm";
 import { auth } from "@clerk/nextjs/server";
-import { prisma } from "@/lib/prisma";
+import { getDb, mongoClient } from "@/lib/mongodb";
 
 type ProjectInput = {
   title: string;
@@ -52,21 +52,16 @@ export default async function Home() {
   let initialData: InitialPortfolioData | null = null;
 
   if (session.userId) {
-    const savedUser = await prisma.user.findUnique({
-      where: { clerkId: session.userId },
-      select: {
-        name: true,
-        portfolio: {
-          select: {
-            bio: true,
-            skills: true,
-            projects: true,
-          },
-        },
-      },
-    });
+    if (!mongoClient.topology || !mongoClient.topology.isConnected()) {
+      await mongoClient.connect();
+    }
 
-    if (savedUser?.portfolio) {
+    const db = getDb();
+    const users = db.collection("User");
+
+    const savedUser = await users.findOne({ clerkId: session.userId });
+
+    if (savedUser && savedUser.portfolio) {
       const projectsPayload = isRecord(savedUser.portfolio.projects)
         ? savedUser.portfolio.projects
         : {};
@@ -86,7 +81,7 @@ export default async function Home() {
           linkedinUrl:
             typeof links.linkedinUrl === "string" ? links.linkedinUrl : "",
           githubUrl: typeof links.githubUrl === "string" ? links.githubUrl : "",
-          skills: savedUser.portfolio.skills,
+          skills: savedUser.portfolio.skills ?? [],
           projects: parseProjects(projectsPayload.projects),
         },
       };
