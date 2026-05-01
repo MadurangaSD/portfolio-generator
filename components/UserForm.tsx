@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { generatePortfolioContent } from "@/lib/gemini";
+import { saveOrUpdatePortfolioAction } from "@/app/actions/portfolio";
 
 type PortfolioFormValues = {
 	fullName: string;
@@ -14,13 +15,49 @@ type PortfolioFormValues = {
 	projects: { title: string; description: string; techStack: string; projectLink: string }[];
 };
 
+type InitialPortfolioData = {
+	aiResponse: string;
+	formData: {
+		fullName: string;
+		role: string;
+		bio: string;
+		linkedinUrl: string;
+		githubUrl: string;
+		skills: string[];
+		projects: { title: string; description: string; techStack: string; projectLink: string }[];
+	};
+};
+
 const steps = ["Profile", "Links", "Bio", "Skills", "Projects", "Review"] as const;
 
-export default function UserForm() {
+type UserFormProps = {
+	initialData?: InitialPortfolioData | null;
+};
+
+export default function UserForm({ initialData }: UserFormProps) {
 	const [currentStep, setCurrentStep] = useState(0);
 	const [submittedData, setSubmittedData] = useState<PortfolioFormValues | null>(null);
 	const [isLoading, setIsLoading] = useState(false);
-	const [aiResponse, setAiResponse] = useState("");
+	const [aiResponse, setAiResponse] = useState(initialData?.aiResponse ?? "");
+	const [saveToast, setSaveToast] = useState<string | null>(null);
+
+	const defaultValues = useMemo<PortfolioFormValues>(() => {
+		return {
+			fullName: initialData?.formData.fullName ?? "",
+			role: initialData?.formData.role ?? "",
+			bio: initialData?.formData.bio ?? "",
+			linkedinUrl: initialData?.formData.linkedinUrl ?? "",
+			githubUrl: initialData?.formData.githubUrl ?? "",
+			skills:
+				initialData?.formData.skills && initialData.formData.skills.length > 0
+					? initialData.formData.skills.map((skill) => ({ value: skill }))
+					: [{ value: "" }],
+			projects:
+				initialData?.formData.projects && initialData.formData.projects.length > 0
+					? initialData.formData.projects
+					: [{ title: "", description: "", techStack: "", projectLink: "" }],
+		};
+	}, [initialData]);
 
 	const {
 		control,
@@ -30,15 +67,7 @@ export default function UserForm() {
 		formState: { errors, isSubmitting },
 	} = useForm<PortfolioFormValues>({
 		mode: "onTouched",
-		defaultValues: {
-			fullName: "",
-			role: "",
-			bio: "",
-			linkedinUrl: "",
-			githubUrl: "",
-			skills: [{ value: "" }],
-			projects: [{ title: "", description: "", techStack: "", projectLink: "" }],
-		},
+		defaultValues,
 	});
 
 	const {
@@ -119,18 +148,16 @@ export default function UserForm() {
 
 			// Persist to the database when the API is available; keep localStorage as a UI fallback.
 			try {
-				const response = await fetch("/api/portfolio", {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify(portfolioObject),
+				const saveResult = await saveOrUpdatePortfolioAction({
+					...portfolioObject,
+					theme: "bento-dark",
 				});
 
-				if (!response.ok) {
-					const errorBody = (await response.json().catch(() => null)) as { error?: string } | null;
-					throw new Error(errorBody?.error ?? "Failed to persist portfolio data.");
+				if (!saveResult.ok) {
+					throw new Error(saveResult.error);
 				}
+
+				setSaveToast("Saved to MongoDB successfully.");
 			} catch (error) {
 				console.error("Database save failed, falling back to localStorage:", error);
 			}
@@ -139,7 +166,7 @@ export default function UserForm() {
 				localStorage.setItem("portfolioData", JSON.stringify(portfolioObject));
 				setTimeout(() => {
 					window.location.href = "/portfolio";
-				}, 500);
+				}, 900);
 			}
 
 			console.log("Portfolio form submitted:", data);
@@ -465,6 +492,16 @@ export default function UserForm() {
 					Form submitted successfully for {submittedData.fullName}. Redirecting to your portfolio...
 				</div>
 			)}
+
+			{saveToast ? (
+				<div
+					role="status"
+					aria-live="polite"
+					className="fixed right-5 bottom-5 z-50 rounded-2xl border border-emerald-400/40 bg-zinc-950/95 px-4 py-3 text-sm font-medium text-emerald-200 shadow-2xl shadow-emerald-900/30"
+				>
+					{saveToast}
+				</div>
+			) : null}
 		</section>
 	);
 }
