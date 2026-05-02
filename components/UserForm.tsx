@@ -1,12 +1,16 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import Image from "next/image";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
+import CloudinaryUpload from "@/components/CloudinaryUpload";
 import { generatePortfolioContent } from "@/lib/gemini";
 import { saveOrUpdatePortfolioAction } from "@/app/actions/portfolio";
 
 type PortfolioFormValues = {
 	username?: string;
+	profileImage?: string | null;
+	projectImages?: string[];
 	fullName: string;
 	role: string;
 	bio: string;
@@ -19,6 +23,9 @@ type PortfolioFormValues = {
 type InitialPortfolioData = {
 	aiResponse: string;
 	formData: {
+		username?: string;
+		profileImage?: string | null;
+		projectImages?: string[];
 		fullName: string;
 		role: string;
 		bio: string;
@@ -41,10 +48,13 @@ export default function UserForm({ initialData }: UserFormProps) {
 	const [isLoading, setIsLoading] = useState(false);
 	const [aiResponse, setAiResponse] = useState(initialData?.aiResponse ?? "");
 	const [saveToast, setSaveToast] = useState<string | null>(null);
+	const [redirectTo, setRedirectTo] = useState<string | null>(null);
 
 	const defaultValues = useMemo<PortfolioFormValues>(() => {
 		return {
 			username: initialData?.formData.username ?? "",
+			profileImage: initialData?.formData.profileImage ?? null,
+			projectImages: initialData?.formData.projectImages ?? [],
 			fullName: initialData?.formData.fullName ?? "",
 			role: initialData?.formData.role ?? "",
 			bio: initialData?.formData.bio ?? "",
@@ -64,6 +74,7 @@ export default function UserForm({ initialData }: UserFormProps) {
 	const {
 		control,
 		register,
+		setValue,
 		handleSubmit,
 		trigger,
 		formState: { errors, isSubmitting },
@@ -198,6 +209,7 @@ useEffect(() => {
 				githubUrl: data.githubUrl,
 				skillsCount: data.skills.length,
 				projectsCount: data.projects.length,
+				profileImage: data.profileImage ?? null,
 				hasFormData: !!data,
 			});
 
@@ -216,6 +228,9 @@ useEffect(() => {
 				aiResponse: result,
 				formData: {
 					username: data.username?.trim().toLowerCase(),
+					// Always use fresh submit payload from RHF to avoid stale watch values.
+					profileImage: data.profileImage ?? null,
+					projectImages: data.projectImages ?? [],
 					fullName: data.fullName,
 					role: data.role,
 					bio: data.bio,
@@ -240,6 +255,7 @@ useEffect(() => {
 			// Persist to the database via server action (no localStorage fallback)
 			try {
 				console.log("[UserForm] Calling server action to save portfolio...");
+				console.log("[UserForm] profileImage value being sent:", portfolioObject.formData.profileImage);
 				const response = await saveOrUpdatePortfolioAction({
 					...portfolioObject,
 					theme: "bento-dark",
@@ -264,16 +280,12 @@ useEffect(() => {
 					console.error("[UserForm] Server returned error:", errorMsg);
 				}
 
-				// Redirect after a short delay so user can see the toast
-				if (typeof window !== "undefined") {
-					setTimeout(() => {
-						const destUsername = response?.username ?? portfolioObject.formData.username ?? data.username?.trim().toLowerCase();
-						if (destUsername) {
-							window.location.href = `/${destUsername}`;
-						} else {
-							window.location.href = "/portfolio";
-						}
-					}, 2000);
+				// Set redirect target and let effect perform navigation
+				const destUsername = response?.username ?? portfolioObject.formData.username ?? data.username?.trim().toLowerCase();
+				if (destUsername) {
+					setRedirectTo(destUsername);
+				} else {
+					setRedirectTo("/portfolio");
 				}
 			} catch (dbError) {
 				console.error("[UserForm] Exception calling server action:", dbError);
@@ -292,6 +304,17 @@ useEffect(() => {
 			setIsLoading(false);
 		}
 	};
+
+	// Perform client navigation after submit/response to avoid router-init timing issues
+	useEffect(() => {
+		if (!redirectTo) return;
+		const isPath = redirectTo.startsWith("/");
+		const dest = isPath ? redirectTo : `/${redirectTo}`;
+		const t = setTimeout(() => {
+			window.location.href = dest;
+		}, 1200);
+		return () => clearTimeout(t);
+	}, [redirectTo]);
 
 	return (
 		<section className="relative mx-auto w-full max-w-4xl overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950/95 p-6 shadow-[0_0_60px_-20px_rgba(16,185,129,0.45)] sm:p-10">
@@ -345,6 +368,17 @@ useEffect(() => {
 					) : usernameAvailable === false ? (
 						<p className="text-sm text-rose-400">✕ Username is already taken</p>
 							) : null}
+						</div>
+						<div className="space-y-2">
+							<label className="text-sm font-medium text-zinc-300">Profile Picture</label>
+							<CloudinaryUpload
+								name="profileImage"
+								setValue={setValue}
+								value={values?.profileImage ?? null}
+								uploadPreset="sithum_default"
+								buttonLabel="Upload Photo"
+							/>
+							<input type="hidden" {...register("profileImage")} />
 						</div>
 						<div className="space-y-2">
 							<label className="text-sm font-medium text-zinc-300">Full Name</label>
@@ -574,6 +608,20 @@ useEffect(() => {
 								<span className="font-semibold text-zinc-100">Skills:</span>{" "}
 								{values.skills?.map((skill) => skill.value).join(", ")}
 							</p>
+							{values.profileImage ? (
+								<div className="space-y-2">
+									<span className="font-semibold text-zinc-100">Profile Image:</span>
+									<div className="h-20 w-20 overflow-hidden rounded-full border border-zinc-700">
+										<Image
+											src={values.profileImage}
+											alt="Profile preview"
+											width={80}
+											height={80}
+											className="h-full w-full object-cover"
+										/>
+									</div>
+								</div>
+							) : null}
 							<div>
 								<span className="font-semibold text-zinc-100">Projects:</span>
 								<ul className="mt-2 space-y-2">

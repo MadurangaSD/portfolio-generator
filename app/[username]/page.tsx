@@ -27,6 +27,7 @@ export default async function UserProfilePage({ params }: Props) {
         skills: portfolio.skills || [],
         theme: portfolio.theme || "bento-dark",
         projects: projectsData,
+        profileImage: portfolio.profileImage ?? null,
       }}
     />
   );

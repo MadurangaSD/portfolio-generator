@@ -27,6 +27,8 @@ model Portfolio {
   userId   String   @unique 
   username String @unique
   bio      String?
+  profileImage String?
+  projectImages String[]
   skills   String[]
   projects Json
   theme    String   @default("bento-dark")

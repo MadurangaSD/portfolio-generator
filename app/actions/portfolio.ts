@@ -13,6 +13,8 @@ type ProjectInput = {
 type SavePortfolioInput = {
   formData: {
     username?: string;
+    profileImage?: string | null;
+    projectImages?: string[];
     fullName: string;
     role: string;
     bio: string;
@@ -41,9 +43,16 @@ type ProjectsJson = {
     fullName: string;
     role: string;
   };
+  profileImage?: string | null;
+  projectImages?: string[];
 };
 
 function buildProjectsJson(payload: SavePortfolioInput): ProjectsJson {
+  const normalizedProfileImage =
+    typeof payload.formData.profileImage === "string" && payload.formData.profileImage.trim().length > 0
+      ? payload.formData.profileImage.trim()
+      : null;
+
   return {
     aiResponse: payload.aiResponse,
     projects: payload.formData.projects,
@@ -55,6 +64,8 @@ function buildProjectsJson(payload: SavePortfolioInput): ProjectsJson {
       fullName: payload.formData.fullName,
       role: payload.formData.role,
     },
+    profileImage: normalizedProfileImage,
+    projectImages: payload.formData.projectImages ?? [],
   };
 }
 
@@ -126,16 +137,24 @@ export async function saveOrUpdatePortfolioAction(
     try {
       const projectsJson = buildProjectsJson(payload);
 
+      console.log("[saveOrUpdatePortfolioAction] profileImage in payload:", payload.formData.profileImage);
+
       // Normalize username to lowercase (if provided)
       const username = payload.formData.username
         ? payload.formData.username.trim().toLowerCase()
         : undefined;
+      const profileImage =
+        typeof payload.formData.profileImage === "string" && payload.formData.profileImage.trim().length > 0
+          ? payload.formData.profileImage.trim()
+          : null;
 
       portfolio = await prisma.portfolio.upsert({
         where: { userId: dbUser.id },
         update: {
           username: username,
           bio: payload.formData.bio ?? null,
+          profileImage,
+          projectImages: payload.formData.projectImages ?? [],
           skills: payload.formData.skills.filter(Boolean),
           projects: projectsJson as Prisma.JsonValue,
           theme: payload.theme ?? "bento-dark",
@@ -144,6 +163,8 @@ export async function saveOrUpdatePortfolioAction(
           userId: dbUser.id,
           username: username,
           bio: payload.formData.bio ?? null,
+          profileImage,
+          projectImages: payload.formData.projectImages ?? [],
           skills: payload.formData.skills.filter(Boolean),
           projects: projectsJson as Prisma.JsonValue,
           theme: payload.theme ?? "bento-dark",

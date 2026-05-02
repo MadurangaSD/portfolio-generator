@@ -41,7 +41,11 @@ export default function RootLayout({
             <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.05)_1px,transparent_1px)] bg-size-[4rem_4rem] opacity-30" />
             <div className="relative flex min-h-screen flex-col">
               <SiteHeader />
-              <main className="flex-1">{children}</main>
+              <main className="flex-1">
+                <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
+                  {children}
+                </div>
+              </main>
             </div>
           </div>
         </body>

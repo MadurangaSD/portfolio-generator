@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Mail, Code, Share2, ArrowRight, Star } from "lucide-react";
 
 interface Project {
@@ -28,6 +29,7 @@ interface PortfolioDisplayProps {
 		skills: string[];
 		theme: string;
 		projects: unknown;
+		profileImage?: string | null;
 	};
 }
 
@@ -44,6 +46,10 @@ export default function PortfolioDisplay({ portfolio }: PortfolioDisplayProps) {
 	const skills = portfolio.skills || [];
 	const linkedinUrl = links.linkedinUrl;
 	const githubUrl = links.githubUrl;
+	const profileImage =
+		typeof portfolio.profileImage === "string" && portfolio.profileImage.trim().length > 0
+			? portfolio.profileImage
+			: null;
 
 	return (
 		<main className="min-h-screen bg-[#050505] text-white overflow-hidden">
@@ -87,9 +93,19 @@ export default function PortfolioDisplay({ portfolio }: PortfolioDisplayProps) {
 
 								{/* Avatar Container */}
 								<div className="relative w-32 h-32 rounded-full bg-gradient-to-br from-cyan-500 to-purple-500 p-0.5">
-									<div className="w-full h-full rounded-full bg-[#050505] flex items-center justify-center text-6xl border border-white/20">
-										✨
-									</div>
+									{profileImage ? (
+										<Image
+											src={profileImage}
+											alt={fullName}
+											width={128}
+											height={128}
+											className="w-full h-full rounded-full object-cover border border-white/20"
+										/>
+									) : (
+										<div className="w-full h-full rounded-full bg-[#050505] flex items-center justify-center text-6xl border border-white/20">
+											✨
+										</div>
+									)}
 								</div>
 							</div>
 						</div>
