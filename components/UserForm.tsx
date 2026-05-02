@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { generatePortfolioContent } from "@/lib/gemini";
 import { saveOrUpdatePortfolioAction } from "@/app/actions/portfolio";
 
 type PortfolioFormValues = {
+	username?: string;
 	fullName: string;
 	role: string;
 	bio: string;
@@ -43,6 +44,7 @@ export default function UserForm({ initialData }: UserFormProps) {
 
 	const defaultValues = useMemo<PortfolioFormValues>(() => {
 		return {
+			username: initialData?.formData.username ?? "",
 			fullName: initialData?.formData.fullName ?? "",
 			role: initialData?.formData.role ?? "",
 			bio: initialData?.formData.bio ?? "",
@@ -94,9 +96,66 @@ export default function UserForm({ initialData }: UserFormProps) {
 		return ((currentStep + 1) / steps.length) * 100;
 	}, [currentStep]);
 
+// Username availability state
+const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+const [checkingUsername, setCheckingUsername] = useState(false);
+const usernameDebounceRef = useRef<number | null>(null);
+
+const checkUsernameAvailability = useCallback(async (raw: string) => {
+  const name = (raw ?? "").trim().toLowerCase();
+	if (!name || name.length < 3) {
+		console.debug("[UserForm] Skipping availability check: username too short", { name, length: name.length });
+		setUsernameAvailable(null);
+		return;
+	}
+	console.debug("[UserForm] Starting availability check for:", name);
+	setCheckingUsername(true);
+	try {
+		const checkUrl = `/api/username?username=${encodeURIComponent(name)}`;
+		console.debug("[UserForm] Fetching availability from:", checkUrl);
+		const res = await fetch(checkUrl);
+		console.debug("[UserForm] Availability check response status:", res.status);
+		if (!res.ok) {
+			console.warn("[UserForm] Availability check failed with status:", res.status);
+			setUsernameAvailable(false);
+		} else {
+			const json = await res.json();
+			console.debug("[UserForm] Availability check result:", json);
+			setUsernameAvailable(Boolean(json.available));
+		}
+	} catch (e) {
+		console.error("[UserForm] username check error", e);
+		setUsernameAvailable(false);
+	} finally {
+		setCheckingUsername(false);
+	}
+}, []);
+
+// Debounced effect when username changes
+useEffect(() => {
+	const name = values?.username ?? "";
+	// Skip entirely if not valid length
+	if (typeof name !== "string" || name.trim().length < 3) {
+		return;
+	}
+	
+	if (usernameDebounceRef.current) window.clearTimeout(usernameDebounceRef.current);
+	usernameDebounceRef.current = window.setTimeout(() => {
+		// only check if pattern roughly valid
+		if (typeof name === "string" && /^[A-Za-z0-9_-]{3,}$/.test(name)) {
+			checkUsernameAvailability(name);
+		} else {
+			setUsernameAvailable(null);
+		}
+	}, 500);
+	return () => {
+		if (usernameDebounceRef.current) window.clearTimeout(usernameDebounceRef.current);
+	};
+}, [values?.username, checkUsernameAvailability]);
+
 	const getStepFields = (step: number): Parameters<typeof trigger>[0] => {
 		if (step === 0) {
-			return ["fullName", "role"];
+			return ["username", "fullName", "role"];
 		}
 		if (step === 1) {
 			return ["linkedinUrl", "githubUrl"];
@@ -156,6 +215,7 @@ export default function UserForm({ initialData }: UserFormProps) {
 			const portfolioObject = {
 				aiResponse: result,
 				formData: {
+					username: data.username?.trim().toLowerCase(),
 					fullName: data.fullName,
 					role: data.role,
 					bio: data.bio,
@@ -197,7 +257,7 @@ export default function UserForm({ initialData }: UserFormProps) {
 				// Use optional chaining to safely check response properties
 				if (response?.ok) {
 					setSaveToast("✓ Saved to MongoDB successfully!");
-					console.log("[UserForm] Server action succeeded, portfolioId:", response?.portfolioId);
+					console.log("[UserForm] Server action succeeded, portfolioId:", response?.portfolioId, "username:", response?.username);
 				} else {
 					const errorMsg = response?.error || "Unknown error";
 					setSaveToast(`Error saving to DB: ${errorMsg}`);
@@ -207,7 +267,12 @@ export default function UserForm({ initialData }: UserFormProps) {
 				// Redirect after a short delay so user can see the toast
 				if (typeof window !== "undefined") {
 					setTimeout(() => {
-						window.location.href = "/portfolio";
+						const destUsername = response?.username ?? portfolioObject.formData.username ?? data.username?.trim().toLowerCase();
+						if (destUsername) {
+							window.location.href = `/${destUsername}`;
+						} else {
+							window.location.href = "/portfolio";
+						}
 					}, 2000);
 				}
 			} catch (dbError) {
@@ -256,6 +321,31 @@ export default function UserForm({ initialData }: UserFormProps) {
 			<form onSubmit={handleSubmit(onSubmit)} className="relative space-y-8">
 				{currentStep === 0 && (
 					<div className="grid gap-5 sm:grid-cols-2">
+						<div className="space-y-2">
+							<label className="text-sm font-medium text-zinc-300">Username</label>
+							<input
+								type="text"
+								placeholder="your-username (no spaces or special chars)"
+								className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 outline-none transition focus:border-emerald-400"
+								{...register("username", {
+									required: "Username is required",
+									minLength: { value: 3, message: "Username must be at least 3 characters" },
+									pattern: { value: /^[A-Za-z0-9_-]+$/, message: "Username may only contain letters, numbers, hyphens and underscores" },
+								})}
+								onBlur={(e) => {
+									const v = e.currentTarget.value?.trim().toLowerCase();
+									if (v && /^[A-Za-z0-9_-]{3,}$/.test(v)) checkUsernameAvailability(v);
+								}}
+							/>
+							{errors.username && <p className="text-sm text-rose-400">{errors.username.message}</p>}
+							{checkingUsername ? (
+						<p className="text-sm text-zinc-400">⏳ Checking availability…</p>
+					) : usernameAvailable === true ? (
+						<p className="text-sm text-emerald-400">✓ Username is available</p>
+					) : usernameAvailable === false ? (
+						<p className="text-sm text-rose-400">✕ Username is already taken</p>
+							) : null}
+						</div>
 						<div className="space-y-2">
 							<label className="text-sm font-medium text-zinc-300">Full Name</label>
 							<input
@@ -522,8 +612,9 @@ export default function UserForm({ initialData }: UserFormProps) {
 					) : (
 						<button
 							type="submit"
-							disabled={isSubmitting || isLoading}
+							disabled={isSubmitting || isLoading || usernameAvailable === false}
 							className="rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:brightness-110 disabled:opacity-60"
+							title={usernameAvailable === false ? "Please choose an available username" : undefined}
 						>
 							{isLoading ? "Generating..." : isSubmitting ? "Submitting..." : "Submit Portfolio"}
 						</button>

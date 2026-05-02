@@ -12,6 +12,7 @@ type ProjectInput = {
 
 type SavePortfolioInput = {
   formData: {
+    username?: string;
     fullName: string;
     role: string;
     bio: string;
@@ -26,7 +27,8 @@ type SavePortfolioInput = {
 
 type SavePortfolioResult =
   | { ok: true; portfolioId: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string }
+  | { ok: true; portfolioId: string; username?: string };
 
 type ProjectsJson = {
   aiResponse: string;
@@ -124,9 +126,15 @@ export async function saveOrUpdatePortfolioAction(
     try {
       const projectsJson = buildProjectsJson(payload);
 
+      // Normalize username to lowercase (if provided)
+      const username = payload.formData.username
+        ? payload.formData.username.trim().toLowerCase()
+        : undefined;
+
       portfolio = await prisma.portfolio.upsert({
         where: { userId: dbUser.id },
         update: {
+          username: username,
           bio: payload.formData.bio ?? null,
           skills: payload.formData.skills.filter(Boolean),
           projects: projectsJson as Prisma.JsonValue,
@@ -134,6 +142,7 @@ export async function saveOrUpdatePortfolioAction(
         },
         create: {
           userId: dbUser.id,
+          username: username,
           bio: payload.formData.bio ?? null,
           skills: payload.formData.skills.filter(Boolean),
           projects: projectsJson as Prisma.JsonValue,
@@ -151,8 +160,8 @@ export async function saveOrUpdatePortfolioAction(
       return { ok: false, error: "Failed to upsert portfolio via Prisma" };
     }
 
-    console.log("[saveOrUpdatePortfolioAction] Portfolio upserted via Prisma. portfolioId:", portfolio.id);
-    return { ok: true, portfolioId: portfolio.id };
+    console.log("[saveOrUpdatePortfolioAction] Portfolio upserted via Prisma. portfolioId:", portfolio.id, "username:", portfolio.username);
+    return { ok: true, portfolioId: portfolio.id, username: portfolio.username ?? undefined };
   } catch (error) {
     console.error("[saveOrUpdatePortfolioAction] Error:");
     console.dir(error, { depth: null });
