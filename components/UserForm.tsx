@@ -128,10 +128,30 @@ export default function UserForm({ initialData }: UserFormProps) {
 	const onSubmit = async (data: PortfolioFormValues) => {
 		setSubmittedData(data);
 		setIsLoading(true);
+		setSaveToast(null);
 
 		try {
+			console.log("[UserForm] Form data to send:", {
+				fullName: data.fullName,
+				role: data.role,
+				bio: data.bio,
+				linkedinUrl: data.linkedinUrl,
+				githubUrl: data.githubUrl,
+				skillsCount: data.skills.length,
+				projectsCount: data.projects.length,
+				hasFormData: !!data,
+			});
+
+			console.log("[UserForm] Starting portfolio generation...");
 			const result = await generatePortfolioContent(data);
+			console.log("[UserForm] AI generation result:", {
+				hasResult: !!result,
+				resultLength: result?.length ?? 0,
+				resultPreview: result?.substring(0, 100) ?? "NO RESULT",
+			});
+
 			setAiResponse(result);
+			console.log("[UserForm] AI content generated successfully");
 
 			const portfolioObject = {
 				aiResponse: result,
@@ -146,32 +166,62 @@ export default function UserForm({ initialData }: UserFormProps) {
 				},
 			};
 
-			// Persist to the database when the API is available; keep localStorage as a UI fallback.
+			console.log("[UserForm] Portfolio object prepared:", {
+				hasAiResponse: !!portfolioObject.aiResponse,
+				formDataComplete: {
+					fullName: !!portfolioObject.formData.fullName,
+					role: !!portfolioObject.formData.role,
+					bio: !!portfolioObject.formData.bio,
+					skillsCount: portfolioObject.formData.skills.length,
+					projectsCount: portfolioObject.formData.projects.length,
+				},
+			});
+
+			// Persist to the database via server action (no localStorage fallback)
 			try {
-				const saveResult = await saveOrUpdatePortfolioAction({
+				console.log("[UserForm] Calling server action to save portfolio...");
+				const response = await saveOrUpdatePortfolioAction({
 					...portfolioObject,
 					theme: "bento-dark",
 				});
 
-				if (!saveResult.ok) {
-					throw new Error(saveResult.error);
+				console.log("Full Server Response:", response);
+
+				// Defensive check: ensure response exists
+				if (!response) {
+					console.error("[UserForm] No response from server");
+					setSaveToast("No response from server. Please try again.");
+					return;
 				}
 
-				setSaveToast("Saved to MongoDB successfully.");
-			} catch (error) {
-				console.error("Database save failed, falling back to localStorage:", error);
+				// Use optional chaining to safely check response properties
+				if (response?.ok) {
+					setSaveToast("✓ Saved to MongoDB successfully!");
+					console.log("[UserForm] Server action succeeded, portfolioId:", response?.portfolioId);
+				} else {
+					const errorMsg = response?.error || "Unknown error";
+					setSaveToast(`Error saving to DB: ${errorMsg}`);
+					console.error("[UserForm] Server returned error:", errorMsg);
+				}
+
+				// Redirect after a short delay so user can see the toast
+				if (typeof window !== "undefined") {
+					setTimeout(() => {
+						window.location.href = "/portfolio";
+					}, 2000);
+				}
+			} catch (dbError) {
+				console.error("[UserForm] Exception calling server action:", dbError);
+				const errorMsg = dbError instanceof Error ? dbError.message : "Unknown error";
+				setSaveToast(`Unexpected error: ${errorMsg}. See console for details.`);
+				console.error("[UserForm] Full error object:", dbError);
+				// Do NOT write to localStorage per request
 			}
 
-			if (typeof window !== "undefined") {
-				localStorage.setItem("portfolioData", JSON.stringify(portfolioObject));
-				setTimeout(() => {
-					window.location.href = "/portfolio";
-				}, 900);
-			}
-
-			console.log("Portfolio form submitted:", data);
+			console.log("[UserForm] Portfolio form submitted:", data);
 		} catch (error) {
-			console.error("Error generating portfolio content:", error);
+			console.error("[UserForm] Error generating portfolio content:", error);
+			setSaveToast("Error generating content. Please try again.");
 			setAiResponse("Error generating content. Please try again.");
 		} finally {
 			setIsLoading(false);

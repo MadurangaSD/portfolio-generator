@@ -1,6 +1,6 @@
 import UserForm from "@/components/UserForm";
-import { auth } from "@clerk/nextjs/server";
-import { getDb, mongoClient } from "@/lib/mongodb";
+import { currentUser } from "@clerk/nextjs/server";
+import { getDb, ensureConnected } from "@/lib/mongodb";
 
 type ProjectInput = {
   title: string;
@@ -48,43 +48,45 @@ function parseProjects(value: unknown): ProjectInput[] {
 }
 
 export default async function Home() {
-  const session = await auth();
+  const user = await currentUser();
   let initialData: InitialPortfolioData | null = null;
 
-  if (session.userId) {
-    if (!mongoClient.topology || !mongoClient.topology.isConnected()) {
-      await mongoClient.connect();
-    }
+  if (user) {
+    try {
+      await ensureConnected();
+      const db = getDb();
+      const users = db.collection("User");
 
-    const db = getDb();
-    const users = db.collection("User");
+      const savedUser = await users.findOne({ clerkId: user.id });
 
-    const savedUser = await users.findOne({ clerkId: session.userId });
+      if (savedUser && savedUser.portfolio) {
+        const projectsPayload = isRecord(savedUser.portfolio.projects)
+          ? savedUser.portfolio.projects
+          : {};
+        const profile = isRecord(projectsPayload.profile) ? projectsPayload.profile : {};
+        const links = isRecord(projectsPayload.links) ? projectsPayload.links : {};
 
-    if (savedUser && savedUser.portfolio) {
-      const projectsPayload = isRecord(savedUser.portfolio.projects)
-        ? savedUser.portfolio.projects
-        : {};
-      const profile = isRecord(projectsPayload.profile) ? projectsPayload.profile : {};
-      const links = isRecord(projectsPayload.links) ? projectsPayload.links : {};
-
-      initialData = {
-        aiResponse:
-          typeof projectsPayload.aiResponse === "string" ? projectsPayload.aiResponse : "",
-        formData: {
-          fullName:
-            typeof profile.fullName === "string"
-              ? profile.fullName
-              : savedUser.name ?? "",
-          role: typeof profile.role === "string" ? profile.role : "",
-          bio: savedUser.portfolio.bio ?? "",
-          linkedinUrl:
-            typeof links.linkedinUrl === "string" ? links.linkedinUrl : "",
-          githubUrl: typeof links.githubUrl === "string" ? links.githubUrl : "",
-          skills: savedUser.portfolio.skills ?? [],
-          projects: parseProjects(projectsPayload.projects),
-        },
-      };
+        initialData = {
+          aiResponse:
+            typeof projectsPayload.aiResponse === "string" ? projectsPayload.aiResponse : "",
+          formData: {
+            fullName:
+              typeof profile.fullName === "string"
+                ? profile.fullName
+                : savedUser.name ?? "",
+            role: typeof profile.role === "string" ? profile.role : "",
+            bio: savedUser.portfolio.bio ?? "",
+            linkedinUrl:
+              typeof links.linkedinUrl === "string" ? links.linkedinUrl : "",
+            githubUrl: typeof links.githubUrl === "string" ? links.githubUrl : "",
+            skills: savedUser.portfolio.skills ?? [],
+            projects: parseProjects(projectsPayload.projects),
+          },
+        };
+      }
+    } catch (error) {
+      console.error("[Home] Failed to load portfolio from MongoDB:", error);
+      // Continue with null initialData; form will work with localStorage fallback
     }
   }
 

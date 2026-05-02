@@ -1,8 +1,7 @@
 "use server";
-
-import { auth, clerkClient } from "@clerk/nextjs/server";
-import { ObjectId } from "mongodb";
-import { getDb, mongoClient } from "@/lib/mongodb";
+import { currentUser } from "@clerk/nextjs/server";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 type ProjectInput = {
   title: string;
@@ -29,7 +28,20 @@ type SavePortfolioResult =
   | { ok: true; portfolioId: string }
   | { ok: false; error: string };
 
-function buildProjectsJson(payload: SavePortfolioInput): Prisma.InputJsonValue {
+type ProjectsJson = {
+  aiResponse: string;
+  projects: ProjectInput[];
+  links: {
+    linkedinUrl: string;
+    githubUrl: string;
+  };
+  profile: {
+    fullName: string;
+    role: string;
+  };
+};
+
+function buildProjectsJson(payload: SavePortfolioInput): ProjectsJson {
   return {
     aiResponse: payload.aiResponse,
     projects: payload.formData.projects,
@@ -41,75 +53,110 @@ function buildProjectsJson(payload: SavePortfolioInput): Prisma.InputJsonValue {
       fullName: payload.formData.fullName,
       role: payload.formData.role,
     },
-  } as Prisma.InputJsonValue;
+  };
 }
 
 export async function saveOrUpdatePortfolioAction(
   payload: SavePortfolioInput,
 ): Promise<SavePortfolioResult> {
-  const session = await auth();
+  console.log("[saveOrUpdatePortfolioAction] Received payload:", {
+    hasFormData: !!payload?.formData,
+    hasAiResponse: !!payload?.aiResponse,
+    formDataKeys: payload?.formData ? Object.keys(payload.formData) : null,
+    skillsCount: payload?.formData?.skills?.length ?? 0,
+    projectsCount: payload?.formData?.projects?.length ?? 0,
+  });
 
-  if (!session.userId) {
+  const user = await currentUser();
+
+  if (!user) {
+    console.error("[saveOrUpdatePortfolioAction] No user found - not authenticated");
     return { ok: false, error: "Unauthorized" };
   }
 
   try {
-    const userFromClerk = await clerkClient().users.getUser(session.userId);
-    const primaryEmail = userFromClerk.primaryEmailAddress?.emailAddress;
+    console.log("[saveOrUpdatePortfolioAction] Starting save for clerkId:", user.id);
 
+    const primaryEmail = user.primaryEmailAddress?.emailAddress;
     if (!primaryEmail) {
+      console.error("[saveOrUpdatePortfolioAction] No primary email found for user");
       return { ok: false, error: "No primary email found for signed-in user." };
     }
 
-    // Ensure MongoDB client is connected
-    if (!mongoClient.topology || !mongoClient.topology.isConnected()) {
-      await mongoClient.connect();
+    // Upsert User via Prisma using clerkId as unique key
+    console.log("[saveOrUpdatePortfolioAction] Upserting user via Prisma with clerkId:", user.id);
+    let dbUser;
+    try {
+      dbUser = await prisma.user.upsert({
+        where: { clerkId: user.id },
+        update: {
+          email: primaryEmail,
+          name:
+            user.firstName && user.lastName
+              ? `${user.firstName} ${user.lastName}`
+              : payload.formData.fullName ?? null,
+        },
+        create: {
+          clerkId: user.id,
+          email: primaryEmail,
+          name:
+            user.firstName && user.lastName
+              ? `${user.firstName} ${user.lastName}`
+              : payload.formData.fullName ?? null,
+        },
+      });
+    } catch (prismaUserError) {
+      console.error("[saveOrUpdatePortfolioAction] prisma.user.upsert threw error:");
+      console.dir(prismaUserError, { depth: null });
+      throw prismaUserError;
     }
 
-    const db = getDb();
-    const users = db.collection("User");
-    const portfolios = db.collection("Portfolio");
+    if (!dbUser || !dbUser.id) {
+      console.error("[saveOrUpdatePortfolioAction] prisma.user.upsert returned no user:", dbUser);
+      return { ok: false, error: "Failed to upsert user via Prisma" };
+    }
 
-    // Upsert user by clerkId
-    const userResult = await users.findOneAndUpdate(
-      { clerkId: session.userId },
-      {
-        $set: {
-          clerkId: session.userId,
-          email: primaryEmail,
-          name: userFromClerk.fullName ?? payload.formData.fullName ?? null,
-          updatedAt: new Date(),
-        },
-        $setOnInsert: { createdAt: new Date() },
-      },
-      { upsert: true, returnDocument: "after" },
-    );
+    console.log("[saveOrUpdatePortfolioAction] User upserted via Prisma. id:", dbUser.id);
 
-    const dbUser = userResult.value;
-    const userId = dbUser._id as ObjectId;
+    // Upsert Portfolio via Prisma using the user's MongoDB id (not Clerk ID) as userId
+    console.log("[saveOrUpdatePortfolioAction] Upserting portfolio via Prisma for userId:", dbUser.id);
+    let portfolio;
+    try {
+      const projectsJson = buildProjectsJson(payload);
 
-    // Upsert portfolio by userId
-    const portfolioResult = await portfolios.findOneAndUpdate(
-      { userId: userId },
-      {
-        $set: {
-          userId,
+      portfolio = await prisma.portfolio.upsert({
+        where: { userId: dbUser.id },
+        update: {
           bio: payload.formData.bio ?? null,
           skills: payload.formData.skills.filter(Boolean),
-          projects: buildProjectsJson(payload),
+          projects: projectsJson as Prisma.JsonValue,
           theme: payload.theme ?? "bento-dark",
-          updatedAt: new Date(),
         },
-        $setOnInsert: { createdAt: new Date() },
-      },
-      { upsert: true, returnDocument: "after" },
-    );
+        create: {
+          userId: dbUser.id,
+          bio: payload.formData.bio ?? null,
+          skills: payload.formData.skills.filter(Boolean),
+          projects: projectsJson as Prisma.JsonValue,
+          theme: payload.theme ?? "bento-dark",
+        },
+      });
+    } catch (prismaPortfolioError) {
+      console.error("[saveOrUpdatePortfolioAction] prisma.portfolio.upsert threw error:");
+      console.dir(prismaPortfolioError, { depth: null });
+      throw prismaPortfolioError;
+    }
 
-    const portfolio = portfolioResult.value;
+    if (!portfolio || !portfolio.id) {
+      console.error("[saveOrUpdatePortfolioAction] prisma.portfolio.upsert returned no portfolio:", portfolio);
+      return { ok: false, error: "Failed to upsert portfolio via Prisma" };
+    }
 
-    return { ok: true, portfolioId: portfolio._id.toString() };
+    console.log("[saveOrUpdatePortfolioAction] Portfolio upserted via Prisma. portfolioId:", portfolio.id);
+    return { ok: true, portfolioId: portfolio.id };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to save portfolio.";
-    return { ok: false, error: message };
+    console.error("[saveOrUpdatePortfolioAction] Error:");
+    console.dir(error, { depth: null });
+    const errorMsg = error instanceof Error ? error.message : JSON.stringify(error);
+    return { ok: false, error: errorMsg };
   }
 }

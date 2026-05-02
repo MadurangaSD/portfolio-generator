@@ -18,6 +18,25 @@ type PortfolioFormValues = {
 };
 
 export async function generatePortfolioContent(userData: PortfolioFormValues) {
+	const buildFallbackContent = () => {
+		const skills = userData.skills.map((skill) => skill.value).filter(Boolean);
+		const projectLines = userData.projects
+			.map((project) => `- ${project.title}: ${project.description}`)
+			.filter(Boolean)
+			.join("\n");
+
+		return [
+			`Professional Summary`,
+			`${userData.fullName} is a ${userData.role} focused on building practical, user-friendly digital experiences.`,
+			"",
+			`Skills Overview`,
+			skills.length > 0 ? skills.join(", ") : "Skills information not provided.",
+			"",
+			`Projects`,
+			projectLines || "Project information not provided.",
+		].join("\n");
+	};
+
 	const prompt = `
 You are a professional career coach and portfolio copywriter.
 Transform the following information into polished portfolio website copy.
@@ -47,7 +66,10 @@ Return a concise but premium result with:
 	const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 	let attemptModel = modelName;
-	let lastError: unknown = null;
+	const isQuotaError = (error: unknown) => {
+		const message = error instanceof Error ? error.message : String(error);
+		return /429|quota exceeded|rate limit|resource exhausted/i.test(message);
+	};
 
 	for (let attempt = 0; attempt <= maxRetries; attempt++) {
 		try {
@@ -56,7 +78,12 @@ Return a concise but premium result with:
 			const response = await result.response;
 			return await response.text();
 		} catch (error) {
-			lastError = error;
+			console.error("[generatePortfolioContent] Error during retry:", error);
+			if (isQuotaError(error)) {
+				console.warn("[generatePortfolioContent] Gemini quota exhausted, using fallback copy.");
+				return buildFallbackContent();
+			}
+
 			// If we've exhausted attempts and no fallback left, break and report
 			const isLastAttempt = attempt === maxRetries;
 
@@ -91,7 +118,5 @@ Return a concise but premium result with:
 	}
 
 	// If somehow we exit loop, throw last error
-	const finalErr = new Error("AI generation failed") as ErrorWithOriginal;
-	finalErr.original = lastError;
-	throw finalErr;
+	return buildFallbackContent();
 }

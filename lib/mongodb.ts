@@ -1,7 +1,12 @@
 import { MongoClient } from "mongodb";
 
 const url = process.env.DATABASE_URL;
-if (!url) throw new Error("DATABASE_URL is not set for MongoDB");
+if (!url) {
+  console.error("[mongodb.ts] DATABASE_URL is not set for MongoDB");
+  throw new Error("DATABASE_URL is not set for MongoDB");
+}
+
+console.log("[mongodb.ts] DATABASE_URL found, initializing MongoClient");
 
 const globalForMongo = globalThis as unknown as { mongoClient?: MongoClient };
 
@@ -11,6 +16,35 @@ if (process.env.NODE_ENV !== "production") {
   globalForMongo.mongoClient = mongoClient;
 }
 
+export async function ensureConnected() {
+  try {
+    console.log("[mongodb.ts] ensureConnected called");
+    console.log("[mongodb.ts] Current topology state:", {
+      topologyExists: !!mongoClient.topology,
+      isConnected: mongoClient.topology?.isConnected,
+      isConnecting: mongoClient.topology?.isConnecting,
+    });
+
+    if (!mongoClient.topology || mongoClient.topology.isConnected === false) {
+      console.log("[mongodb.ts] Topology not ready, calling connect()");
+      const connectResult = await mongoClient.connect();
+      console.log("[mongodb.ts] connect() completed, result:", !!connectResult);
+    } else {
+      console.log("[mongodb.ts] Topology already connected");
+    }
+
+    // Verify connection by doing a simple ping
+    const admin = mongoClient.db("admin");
+    const pingResult = await admin.command({ ping: 1 });
+    console.log("[mongodb.ts] MongoDB ping successful:", pingResult);
+  } catch (error) {
+    console.error("[mongodb.ts] Failed to ensure MongoDB connection:", error);
+    throw error;
+  }
+}
+
 export function getDb(dbName = "portfolio_generator") {
-  return mongoClient.db(dbName);
+  const db = mongoClient.db(dbName);
+  console.log("[mongodb.ts] Returning database instance:", dbName);
+  return db;
 }

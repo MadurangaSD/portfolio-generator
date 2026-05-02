@@ -4,12 +4,12 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
-  output   = "../lib/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "mongodb"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -24,7 +24,8 @@ model User {
 
 model Portfolio {
   id       String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId   String   @unique @db.ObjectId
+  userId   String   @unique 
+  username String @unique
   bio      String?
   skills   String[]
   projects Json
