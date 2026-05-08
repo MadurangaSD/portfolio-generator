@@ -19,19 +19,10 @@ if (process.env.NODE_ENV !== "production") {
 export async function ensureConnected() {
   try {
     console.log("[mongodb.ts] ensureConnected called");
-    console.log("[mongodb.ts] Current topology state:", {
-      topologyExists: !!mongoClient.topology,
-      isConnected: mongoClient.topology?.isConnected,
-      isConnecting: mongoClient.topology?.isConnecting,
-    });
 
-    if (!mongoClient.topology || mongoClient.topology.isConnected === false) {
-      console.log("[mongodb.ts] Topology not ready, calling connect()");
-      const connectResult = await mongoClient.connect();
-      console.log("[mongodb.ts] connect() completed, result:", !!connectResult);
-    } else {
-      console.log("[mongodb.ts] Topology already connected");
-    }
+    // Connect to MongoDB (safe to call multiple times - it's idempotent)
+    const connectResult = await mongoClient.connect();
+    console.log("[mongodb.ts] connect() completed, result:", !!connectResult);
 
     // Verify connection by doing a simple ping
     const admin = mongoClient.db("admin");

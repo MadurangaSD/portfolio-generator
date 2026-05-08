@@ -321,7 +321,7 @@ const Footer = ({ fullName, bio, linkString, githubUrl, linkedinUrl }: { fullNam
 
 const tileVariants = {
 	hidden: { opacity: 0, y: 18 },
-	visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.2, 0.8, 0.2, 1] } },
+	visible: { opacity: 1, y: 0, transition: { duration: 0.55 } },
 };
 
 const badgeVariants = {
@@ -329,23 +329,11 @@ const badgeVariants = {
 	visible: { opacity: 1, y: 0 },
 };
 
-interface PortfolioDisplayProps {
-	portfolio: {
-		bio: string;
-		skills: string[];
-		theme: string;
-		projects: unknown;
-		profileImage?: string | null;
-		username?: string | null;
-	};
-}
-
 export default function PortfolioDisplay({ portfolio }: PortfolioDisplayProps) {
 	const projectsData = typeof portfolio.projects === "object" && portfolio.projects !== null ? portfolio.projects : {};
 	const projects = (projectsData as ProjectsData).projects || [];
-	const profile = (projectsData as ProjectsData).profile || {};
-	const links = (projectsData as ProjectsData).links || {};
-
+	const profile = (projectsData as ProjectsData).profile as { fullName?: string; role?: string } || {};
+	const links = (projectsData as ProjectsData).links as { linkedinUrl?: string; githubUrl?: string } || {};
 	const fullName = profile.fullName || "Portfolio";
 	const role = profile.role || "Developer";
 	const bio = portfolio.bio || "Welcome to my portfolio";

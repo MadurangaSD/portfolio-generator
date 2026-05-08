@@ -1,7 +1,25 @@
 import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
-import { prisma } from "@/lib/prisma";
+import { ensureConnected, getDb } from "@/lib/mongodb";
 import PortfolioDisplay from "@/components/PortfolioDisplay";
+
+type PortfolioDocument = {
+	_id: unknown;
+	userId: string;
+	username: string;
+	bio: string | null;
+	profileImage: string | null;
+	projectImages: string[];
+	skills: string[];
+	projects: unknown;
+	theme: string;
+};
+
+type UserDocument = {
+	_id: unknown;
+	clerkId: string;
+	portfolio?: PortfolioDocument | null;
+};
 
 export default async function PortfolioPage() {
 	// Get authenticated user
@@ -20,11 +38,13 @@ export default async function PortfolioPage() {
 		);
 	}
 
-	// Fetch portfolio directly using Clerk user.id
-	// (Portfolio.userId is stored as the Clerk user ID, not the MongoDB ObjectId)
-	const portfolio = await prisma.portfolio.findUnique({
-		where: { userId: user.id },
-	});
+	await ensureConnected();
+	const db = getDb();
+	const users = db.collection<UserDocument>("User");
+	const portfolios = db.collection<PortfolioDocument>("Portfolio");
+
+	const savedUser = await users.findOne({ clerkId: user.id });
+	const portfolio = savedUser?.portfolio ?? (await portfolios.findOne({ userId: String(savedUser?._id ?? "") }));
 
 	if (!portfolio) {
 		return (

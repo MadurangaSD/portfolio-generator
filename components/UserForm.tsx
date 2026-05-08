@@ -273,7 +273,7 @@ useEffect(() => {
 				// Use optional chaining to safely check response properties
 				if (response?.ok) {
 					setSaveToast("✓ Saved to MongoDB successfully!");
-					console.log("[UserForm] Server action succeeded, portfolioId:", response?.portfolioId, "username:", response?.username);
+					console.log("[UserForm] Server action succeeded, portfolioId:", response?.portfolioId, "username:", (response as { username?: string })?.username);
 				} else {
 					const errorMsg = response?.error || "Unknown error";
 					setSaveToast(`Error saving to DB: ${errorMsg}`);
@@ -281,7 +281,7 @@ useEffect(() => {
 				}
 
 				// Set redirect target and let effect perform navigation
-				const destUsername = response?.username ?? portfolioObject.formData.username ?? data.username?.trim().toLowerCase();
+			const destUsername = (response as { username?: string })?.username ?? portfolioObject.formData.username ?? data.username?.trim().toLowerCase();
 				if (destUsername) {
 					setRedirectTo(destUsername);
 				} else {
@@ -373,7 +373,7 @@ useEffect(() => {
 							<label className="text-sm font-medium text-zinc-300">Profile Picture</label>
 							<CloudinaryUpload
 								name="profileImage"
-								setValue={setValue}
+								setValue={setValue as (name: string, value: unknown, opts?: unknown) => void}
 								value={values?.profileImage ?? null}
 								uploadPreset="sithum_default"
 								buttonLabel="Upload Photo"

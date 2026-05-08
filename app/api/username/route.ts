@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { ensureConnected, getDb } from "@/lib/mongodb";
 
 export async function GET(request: Request) {
   try {
@@ -7,7 +7,10 @@ export async function GET(request: Request) {
     const username = (url.searchParams.get("username") || "").trim().toLowerCase();
     if (!username) return NextResponse.json({ available: false }, { status: 200 });
 
-    const existing = await prisma.portfolio.findUnique({ where: { username } });
+    await ensureConnected();
+    const db = getDb();
+    const portfolios = db.collection("Portfolio");
+    const existing = await portfolios.findOne({ username });
     return NextResponse.json({ available: existing ? false : true });
   } catch (error) {
     console.error("[username availability] Error:", error);

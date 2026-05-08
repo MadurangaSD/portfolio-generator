@@ -2,7 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
-import { CldUploadWidget, CldUploadWidgetOnUpload } from "next-cloudinary";
+import { CldUploadWidget } from "next-cloudinary";
 
 type Props = {
   name: string;
@@ -15,7 +15,7 @@ type Props = {
 export default function CloudinaryUpload({ name, setValue, value, uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? "ml_default", buttonLabel = "Upload" }: Props) {
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
 
-  const handleUploadResult = (result: Parameters<CldUploadWidgetOnUpload>[0]) => {
+  const handleUploadResult = (result: unknown) => {
     try {
       // result.info is expected from CldUploadWidget callback
       const info = (result as unknown as { info?: Record<string, unknown> })?.info;
@@ -39,7 +39,6 @@ export default function CloudinaryUpload({ name, setValue, value, uploadPreset =
     <div>
       <CldUploadWidget
         uploadPreset={uploadPreset}
-        cloudName={cloudName}
         onUpload={handleUploadResult}
         onSuccess={handleUploadResult}
         options={{ sources: ["local", "url", "camera"], multiple: false }}
@@ -49,7 +48,7 @@ export default function CloudinaryUpload({ name, setValue, value, uploadPreset =
             <button
               type="button"
               onClick={() => open()}
-              disabled={!cloudName}
+              disabled={!uploadPreset}
               className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-800"
             >
               {buttonLabel}

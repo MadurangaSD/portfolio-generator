@@ -71,7 +71,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const clerkUser = await clerkClient().users.getUser(session.userId);
+  const client = await clerkClient();
+  const clerkUser = await client.users.getUser(session.userId);
   const body = (await request.json()) as PortfolioRecord;
 
   if (!body?.aiResponse || !body?.formData?.fullName || !body?.formData?.role) {
@@ -91,7 +92,7 @@ export async function POST(request: Request) {
   try {
     const result = await saveToMongoDataApi(record);
 
-    if (!result.ok) {
+    if ('ok' in result && !result.ok) {
       return NextResponse.json(
         {
           error: result.reason,
@@ -102,10 +103,11 @@ export async function POST(request: Request) {
       );
     }
 
+    const successResult = result as { insertedId: string };
     return NextResponse.json(
       {
         message: "Portfolio saved",
-        insertedId: result.insertedId,
+        insertedId: successResult.insertedId,
         savedToDatabase: true,
       },
       { status: 201 },
