@@ -98,80 +98,50 @@ export default function DashboardOverview() {
               <p className="mt-2 text-2xl font-semibold text-white">2</p>
             </div>
           </div>
-
-          <Link
-            href="/dashboard"
-            className="mt-8 inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-400/40 bg-gradient-to-br from-cyan-500/20 to-cyan-600/10 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-cyan-950/40 transition hover:border-cyan-300/60 hover:from-cyan-500/30 hover:to-cyan-600/20 hover:shadow-cyan-950/60 active:scale-95"
-          >
-            <Sparkles className="h-4.5 w-4.5" />
-            Edit Portfolio
-            <ArrowRight className="h-4 w-4" />
-          </Link>
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/5 p-7 shadow-2xl shadow-black/30 backdrop-blur-xl">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/30 bg-cyan-400/10 text-cyan-200">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Next action</p>
-              <p className="text-lg font-semibold text-white">Polish featured project</p>
-            </div>
+          <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-violet-400/25 bg-violet-400/10 text-violet-200">
+            <Sparkles className="h-5 w-5" />
           </div>
-          <p className="mt-4 text-sm leading-7 text-slate-300">
-            Add one measurable outcome to your first project card to increase recruiter impact.
+          <h2 className="text-xl font-semibold text-white">AI Portfolio Builder</h2>
+          <p className="mt-3 text-sm text-slate-400">
+            Let AI craft compelling stories about your projects and expertise.
           </p>
+
+          <Link href="/portfolio" className="mt-6 inline-flex items-center gap-2 rounded-xl border border-violet-400/30 bg-violet-400/10 px-4 py-2 text-sm font-medium text-violet-200 transition hover:border-violet-400/50 hover:bg-violet-400/20">
+            Open Builder
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </section>
 
-      <section className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-7 shadow-2xl shadow-black/30 backdrop-blur-xl">
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-cyan-200/70">
-              Recent portfolios
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Your latest builds</h2>
-          </div>
-          <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-slate-900/70 px-3 py-2 text-xs text-slate-300 sm:flex">
-            <Layers3 className="h-4 w-4" />
-            Dummy data for now
-          </div>
-        </div>
-
-        <div className="grid gap-5 md:grid-cols-2">
-          {recentPortfolios.map((item) => (
-            <article
-              key={item.id}
-              className="rounded-2xl border border-white/10 bg-slate-950/60 p-5 transition hover:border-cyan-300/30"
+      <section className="mt-6">
+        <h2 className="text-lg font-semibold text-white mb-4">Recent Portfolios</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          {recentPortfolios.map((portfolio) => (
+            <div
+              key={portfolio.id}
+              className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-lg shadow-black/20 backdrop-blur-xl transition hover:border-white/20 hover:bg-white/10"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-white">{item.title}</p>
-                  <p className="mt-1 text-sm text-slate-400">{item.role}</p>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-white">{portfolio.title}</h3>
+                  <p className="mt-1 text-sm text-slate-400">{portfolio.role}</p>
                 </div>
-                <span
-                  className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                    item.status === 'Published'
-                      ? 'border-emerald-300/30 bg-emerald-400/10 text-emerald-200'
-                      : 'border-amber-300/30 bg-amber-400/10 text-amber-100'
-                  }`}
-                >
-                  {item.status}
+                <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  portfolio.status === 'Published'
+                    ? 'border border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
+                    : 'border border-slate-400/30 bg-slate-400/10 text-slate-300'
+                }`}>
+                  {portfolio.status}
                 </span>
               </div>
-
-              <div className="mt-5 flex items-center gap-5 text-xs text-slate-400">
-                <div className="inline-flex items-center gap-1.5">
-                  <Clock4 className="h-3.5 w-3.5" />
-                  Updated {item.updatedAt}
-                </div>
-                <div className="inline-flex items-center gap-1.5">
-                  <FolderKanban className="h-3.5 w-3.5" />
-                  {item.id}
-                </div>
-              </div>
-            </article>
+              <p className="mt-3 flex items-center gap-1 text-xs text-slate-400">
+                <Clock4 className="h-3 w-3" />
+                Updated {portfolio.updatedAt}
+              </p>
+            </div>
           ))}
         </div>
       </section>
